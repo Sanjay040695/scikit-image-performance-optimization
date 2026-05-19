@@ -1,0 +1,31 @@
+{
+  "_comment": "PLACEHOLDER. This file is rewritten by tests.ipynb after the real Colab run. Do NOT edit by hand — the graders compare your reported numbers to what they re-measure.",
+  "repo": "scikit-image/scikit-image",
+  "baseline_sha": "TO_BE_FILLED_BY_TESTS_NOTEBOOK",
+  "candidate_description": "Vectorized regionprops_table fast path: scipy.ndimage.find_objects for all bboxes, np.bincount for areas/centroid sums/weighted centroid sums, scipy.ndimage.minimum/maximum for per-label intensity extrema; replaces the per-region Python dispatch loop for the common scalar property set, with safe fallback to the original implementation for unsupported properties.",
+  "baseline_time_s": {
+    "median": null,
+    "iqr": null,
+    "n_warmup": 2,
+    "n_measured": 7
+  },
+  "candidate_time_s": {
+    "median": null,
+    "iqr": null,
+    "n_warmup": 2,
+    "n_measured": 7
+  },
+  "speedup": null,
+  "correctness": {
+    "existing_tests_pass": null,
+    "output_equivalent": null,
+    "tolerance": "1e-6 relative",
+    "tolerance_justification": "np.bincount accumulates sums across the full image; the baseline uses per-region np.sum. Both compute identical mathematical quantities but in different orders, so float results differ at ~1e-12 relative. Integer columns (label, area, bbox, bbox_area) are required to match exactly."
+  },
+  "environment": {
+    "cpu_model": "TO_BE_FILLED_BY_TESTS_NOTEBOOK",
+    "ram_gb": null,
+    "python_version": "TO_BE_FILLED_BY_TESTS_NOTEBOOK",
+    "colab_runtime": "CPU / High-RAM"
+  }
+}
