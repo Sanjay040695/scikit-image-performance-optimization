@@ -29,14 +29,21 @@ from __future__ import annotations
 import numpy as np
 
 
-# Default workload parameters. Sized for Colab CPU runtime
-# (~12-25 s baseline regionprops_table wall time, fits in 12.7 GB RAM).
+# Default workload parameters. Sized for Colab CPU runtime — produces
+# ~12-20 s baseline regionprops_table wall time on v0.24.0 (the brief
+# requires ≥10 s). Fits comfortably in 12.7 GB RAM.
 DEFAULT_H = 4096
 DEFAULT_W = 4096
 DEFAULT_N_DISKS = 6000
 DEFAULT_R_MIN = 4
 DEFAULT_R_MAX = 18
 DEFAULT_SEED = 42
+
+# Number of distinct intensity channels to process per workload run.
+# This mirrors a realistic multi-channel imaging pipeline (think DAPI +
+# GFP + RFP on the same segmented regions). Each timed run extracts
+# properties from ALL channels.
+N_INTENSITY_CHANNELS = 15
 
 # The exact property set we extract. These are all commonly used scalar /
 # fixed-shape properties that stress every line of the regionprops_table
@@ -109,15 +116,22 @@ def build_workload(
     r_min: int = DEFAULT_R_MIN,
     r_max: int = DEFAULT_R_MAX,
     seed: int = DEFAULT_SEED,
+    n_channels: int = N_INTENSITY_CHANNELS,
 ):
-    """Build (label_image, intensity_image) ready for regionprops_table.
+    """Build (label_image, intensities, n_labels) ready for regionprops_table.
+
+    The workload is "process N_INTENSITY_CHANNELS independent intensity
+    channels over the same labelled regions" — this models real
+    multi-channel bio-imaging pipelines (e.g. DAPI/GFP/RFP on the same
+    segmented cells). Each timed run iterates over all channels.
 
     Returns
     -------
     label_image : np.ndarray, shape (H, W), int32
         Connected-component labels (0 = background).
-    intensity_image : np.ndarray, shape (H, W), float32
-        Random intensity in [0, 1).
+    intensities : list[np.ndarray]
+        n_channels float32 intensity images, all shape (H, W), drawn from
+        independent fixed seeds for determinism.
     n_labels : int
         Number of foreground regions actually placed.
     """
@@ -125,8 +139,11 @@ def build_workload(
 
     binary = make_binary_image(H, W, n_disks, r_min, r_max, seed)
     labels = label(binary, connectivity=2).astype(np.int32, copy=False)
-    intensity = make_intensity_image(binary.shape)
-    return labels, intensity, int(labels.max())
+    intensities = [
+        make_intensity_image(binary.shape, seed=DEFAULT_SEED + 1 + i)
+        for i in range(n_channels)
+    ]
+    return labels, intensities, int(labels.max())
 
 
 if __name__ == "__main__":
