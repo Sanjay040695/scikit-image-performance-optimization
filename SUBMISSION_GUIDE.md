@@ -4,10 +4,10 @@ This guide replaces the previous one. Follow it from the top.
 
 ## The whole flow in three minutes of reading
 
-We targeted scikit-image **v0.22.0** (Nov 2023, satisfies the brief's
+We targeted scikit-image **v0.24.0** (June 2024, satisfies the brief's
 ≥12-month requirement) because PyPI ships binary wheels for it on Python
 3.10 / 3.11 / 3.12. That means **no Cython compile in Colab**, no
-fragile build pins — `pip install scikit-image==0.22.0` is one line and
+fragile build pins — `pip install scikit-image==0.24.0` is one line and
 ~99% reliable.
 
 You will:
@@ -53,7 +53,7 @@ chmod +x update_and_push.sh
 ```
 
 The script stages every changed file, commits with a clean message
-("v2 — switch baseline to scikit-image v0.22.0"), and pushes to
+("v2 — switch baseline to scikit-image v0.24.0"), and pushes to
 `origin main`. You'll be asked for your GitHub username + token again
 (or it may use the keychain from yesterday).
 
@@ -147,6 +147,6 @@ After `tests.ipynb` finishes:
 |---|---|
 | `update_and_push.sh: command not found` | Run `chmod +x update_and_push.sh` first |
 | `git push` rejected with "non-fast-forward" | Pull first: `git pull --rebase origin main`, then push |
-| Colab cell errors `AssertionError: Expected scikit-image 0.22.0` | Run a single cell first: `!pip install --upgrade scikit-image==0.22.0`. Then **Runtime → Restart session**, then Run all again. |
+| Colab cell errors `AssertionError: Expected scikit-image 0.22.0` | Run a single cell first: `!pip install --upgrade scikit-image==0.24.0`. Then **Runtime → Restart session**, then Run all again. |
 | `SPEEDUP = null` in the final output | One of correctness checks failed. Look above for `regressions:` and the `match=False` lines and share those |
 | Colab times out / disconnects mid-run | Re-run from `Runtime → Run all`. Colab tab needs to stay open for the duration |

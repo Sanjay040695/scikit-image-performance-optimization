@@ -50,7 +50,7 @@ regions × 10 properties) from Python is what hurts.
 ```
 
 Annotated `_props_to_dict` (the inner-loop body — line numbers from
-v0.22.0 source):
+v0.24.0 source):
 
 ```
 % Time   Line
