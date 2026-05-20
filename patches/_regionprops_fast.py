@@ -187,10 +187,6 @@ def regionprops_table_fast(
     H, W = labels.shape
     n_labels = int(labels.max())
 
-    # find_objects gives one slice-tuple per label index in [1..n_labels],
-    # or None where that label is absent. This is identical to what
-    # regionprops() uses internally, and identical to what skimage's
-    # _RegionProperties walks over.
     slices = ndi.find_objects(labels, max_label=n_labels)
     present_idx = [i for i, s in enumerate(slices) if s is not None]
     n_regions = len(present_idx)
@@ -206,43 +202,40 @@ def regionprops_table_fast(
         bbox[j, 1] = sc.start
         bbox[j, 2] = sr.stop
         bbox[j, 3] = sc.stop
-    # Tight Python loop, but only over n_regions and only doing four
-    # integer extractions per region. This is ~1000x cheaper than the
-    # original per-region property dispatch.
 
-    # ----- bulk reductions over the full label image -----
+    # ----- FOREGROUND-ONLY bincount reductions -----
+    # Key optimization (vs earlier versions of this file): only scan the
+    # ~10% of pixels that are foreground, not all H*W pixels. For a
+    # 4096x4096 image with 6000 disks, this drops per-call memory traffic
+    # from ~500 MB to ~75 MB, and is the difference between this fast
+    # path being faster vs slower than scikit-image's own implementation.
     flat = labels.ravel()
+    nz_idx = np.flatnonzero(flat)                       # 1D foreground indices
+    flat_nz = flat[nz_idx]                              # foreground labels only
 
-    # area via bincount.
-    counts_full = np.bincount(flat, minlength=n_labels + 1)
-    area = counts_full[label_values]  # int64
+    counts_full = np.bincount(flat_nz, minlength=n_labels + 1)
+    area = counts_full[label_values]                    # int64
 
-    # centroid: row/col sums per label, divided by area.
-    # We build the broadcasted row / col index buffers as float64 once.
-    row_idx = np.repeat(
-        np.arange(H, dtype=np.float64), W
-    )
-    col_idx = np.tile(
-        np.arange(W, dtype=np.float64), H
-    )
-    sum_r_full = np.bincount(flat, weights=row_idx, minlength=n_labels + 1)
-    sum_c_full = np.bincount(flat, weights=col_idx, minlength=n_labels + 1)
+    # Foreground-only row/col coords (cast to float64 for bincount weights).
+    row_nz = (nz_idx // W).astype(np.float64, copy=False)
+    col_nz = (nz_idx % W).astype(np.float64, copy=False)
+    sum_r_full = np.bincount(flat_nz, weights=row_nz, minlength=n_labels + 1)
+    sum_c_full = np.bincount(flat_nz, weights=col_nz, minlength=n_labels + 1)
     centroid_r = sum_r_full[label_values] / area
     centroid_c = sum_c_full[label_values] / area
 
     # intensity-derived quantities (only if needed).
     have_intensity = intensity_image is not None
     if have_intensity:
-        intens = np.ascontiguousarray(intensity_image).astype(
+        intens_nz = intensity_image.ravel()[nz_idx].astype(
             np.float64, copy=False
-        ).ravel()
-        sum_i_full = np.bincount(flat, weights=intens, minlength=n_labels + 1)
-        sum_ir_full = np.bincount(
-            flat, weights=intens * row_idx, minlength=n_labels + 1
         )
-        sum_ic_full = np.bincount(
-            flat, weights=intens * col_idx, minlength=n_labels + 1
-        )
+        sum_i_full = np.bincount(flat_nz, weights=intens_nz,
+                                 minlength=n_labels + 1)
+        sum_ir_full = np.bincount(flat_nz, weights=intens_nz * row_nz,
+                                  minlength=n_labels + 1)
+        sum_ic_full = np.bincount(flat_nz, weights=intens_nz * col_nz,
+                                  minlength=n_labels + 1)
         sum_i = sum_i_full[label_values]
         mean_int = sum_i / area
         wcen_r = sum_ir_full[label_values] / sum_i
