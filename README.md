@@ -1,4 +1,4 @@
-# scikit-image v0.18.3 — vectorized `regionprops_table` fast path
+# scikit-image v0.22.0 — vectorized `regionprops_table` fast path
 
 A take-home performance optimization for the Mercor Performance Engineering brief.
 This repo contains the three required Colab notebooks, the patch, the
@@ -8,25 +8,36 @@ the speedup.
 ## TL;DR
 
 - **Repo:** `scikit-image/scikit-image`
-- **Baseline tag:** `v0.18.3` (released 2021-03-31, ≥ 12 months old).
+- **Baseline tag:** `v0.22.0` (released 2023-11-21, ≥ 12 months old).
 - **Hot path:** `skimage.measure.regionprops_table` — the canonical
   entry point for extracting per-region scalar measurements from a
   labelled image (used in cell counting, particle analysis, bio-imaging).
 - **What we changed:** A new module `skimage/measure/_regionprops_fast.py`
   and a small dispatch block at the top of `regionprops_table()` that
   routes calls whose properties are all in a supported scalar-property
-  set (and `extra_properties is None`) to a vectorized path. All other
-  calls run the original implementation unchanged.
+  set (and `extra_properties is None`, `spacing is None`) to a vectorized
+  path. All other calls run the original implementation unchanged.
 - **Why it's faster:** The original implementation walks every region
   in a Python loop, paying `_RegionProperties.__getitem__` dispatch
   cost on every (region, property) access. The fast path replaces that
   O(n_regions × n_properties) Python loop with O(1) C-level reductions
   (`np.bincount`, `scipy.ndimage.find_objects`, `scipy.ndimage.minimum`/
   `.maximum`).
-- **Expected Colab CPU speedup on the workload below:** 2–6×
-  (configured target per the brief). The actual measured number is
-  written by `tests.ipynb` into `reward.json` — `tests.ipynb` is the
-  single source of truth.
+- **Expected Colab CPU speedup on the workload below:** 2–5×.
+  The actual measured number is written by `tests.ipynb` into
+  `reward.json` — `tests.ipynb` is the single source of truth.
+
+## Why v0.22.0 and not an older tag?
+
+v0.22.0 was chosen because:
+- It satisfies the brief's "≥ 12 months old" rule (released Nov 2023).
+- PyPI ships binary wheels for Python 3.10 / 3.11 / 3.12, so the install
+  in Colab is `pip install scikit-image==0.22.0` — no Cython compile,
+  no fragile pin gymnastics, ~99% reliable on any current Colab runtime.
+- Most importantly: the per-region Python loop in `regionprops_table`
+  that our patch targets is still the dominant cost for the property
+  mix we use. v0.22.0 did add some internal optimizations to a few
+  individual properties, but the per-region dispatch pattern remains.
 
 ## Repository layout
 

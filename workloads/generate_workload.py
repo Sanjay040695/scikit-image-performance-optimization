@@ -38,20 +38,24 @@ DEFAULT_R_MIN = 4
 DEFAULT_R_MAX = 18
 DEFAULT_SEED = 42
 
-# The exact property set we extract. These are all commonly used
-# scalar / fixed-shape properties; together they stress every line of
-# the regionprops_table per-region inner loop.
+# The exact property set we extract. These are all commonly used scalar /
+# fixed-shape properties that stress every line of the regionprops_table
+# per-region inner loop.
+#
+# We use the v0.22+ NEW property names because that's the active baseline.
+# v0.18-era names (mean_intensity, weighted_centroid, ...) were renamed
+# to intensity_mean / centroid_weighted / ... in v0.20.
 WORKLOAD_PROPERTIES = (
     "label",
     "area",
     "bbox",
     "centroid",
-    "weighted_centroid",
-    "mean_intensity",
-    "equivalent_diameter",
+    "centroid_weighted",
+    "intensity_mean",
+    "equivalent_diameter_area",
     "extent",
-    "min_intensity",
-    "max_intensity",
+    "intensity_min",
+    "intensity_max",
 )
 
 

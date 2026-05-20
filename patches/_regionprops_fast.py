@@ -62,30 +62,75 @@ import numpy as np
 
 # ---------------------------------------------------------------------------
 # Property sets supported by this fast path.
+#
+# scikit-image renamed many properties in v0.20 (Mar 2023):
+#   bbox_area               -> area_bbox
+#   convex_area             -> area_convex
+#   filled_area             -> area_filled
+#   equivalent_diameter     -> equivalent_diameter_area
+#   weighted_centroid       -> centroid_weighted
+#   weighted_local_centroid -> centroid_weighted_local
+#   local_centroid          -> centroid_local
+#   mean_intensity          -> intensity_mean
+#   min_intensity           -> intensity_min
+#   max_intensity           -> intensity_max
+#
+# We accept BOTH names for forward/backward compatibility; the output
+# column name matches whatever the caller asked for.
 # ---------------------------------------------------------------------------
 
-_FAST_PROPS_BINARY = frozenset({
-    "label", "area", "bbox", "bbox_area",
-    "centroid", "local_centroid",
-    "equivalent_diameter", "extent",
+_NAME_ALIASES = {
+    # old name -> new name
+    "bbox_area":                "area_bbox",
+    "equivalent_diameter":      "equivalent_diameter_area",
+    "weighted_centroid":        "centroid_weighted",
+    "weighted_local_centroid":  "centroid_weighted_local",
+    "local_centroid":           "centroid_local",
+    "mean_intensity":           "intensity_mean",
+    "min_intensity":            "intensity_min",
+    "max_intensity":            "intensity_max",
+}
+_NAME_ALIASES.update({v: k for k, v in _NAME_ALIASES.items()})   # bidirectional
+
+_FAST_PROPS_BINARY_CANONICAL = frozenset({
+    "label", "area", "bbox", "area_bbox",
+    "centroid", "centroid_local",
+    "equivalent_diameter_area", "extent",
 })
 
-_FAST_PROPS_INTENSITY = frozenset({
-    "weighted_centroid", "weighted_local_centroid",
-    "mean_intensity", "min_intensity", "max_intensity",
+_FAST_PROPS_INTENSITY_CANONICAL = frozenset({
+    "centroid_weighted", "centroid_weighted_local",
+    "intensity_mean", "intensity_min", "intensity_max",
 })
 
-_FAST_PROPS_ALL = _FAST_PROPS_BINARY | _FAST_PROPS_INTENSITY
+
+def _canonical(prop: str) -> str:
+    """Return the canonical (v0.22+) name for a property."""
+    if prop in _FAST_PROPS_BINARY_CANONICAL or prop in _FAST_PROPS_INTENSITY_CANONICAL:
+        return prop
+    return _NAME_ALIASES.get(prop, prop)
 
 
-def can_use_fast_path(properties, intensity_image, extra_properties) -> bool:
-    """Decide whether the fast vectorized path supports this call."""
+def can_use_fast_path(properties, intensity_image, extra_properties,
+                      spacing=None) -> bool:
+    """Decide whether the fast vectorized path supports this call.
+
+    Falls back to the original implementation if:
+      - any extra_properties were passed,
+      - any spacing was passed (centroids would be in physical units),
+      - any requested property isn't in the supported set,
+      - intensity properties are requested without an intensity image.
+    """
     if extra_properties is not None:
         return False
-    props_set = set(properties)
-    if not props_set.issubset(_FAST_PROPS_ALL):
+    if spacing is not None:
         return False
-    if intensity_image is None and (props_set & _FAST_PROPS_INTENSITY):
+    canon = {_canonical(p) for p in properties}
+    if not canon.issubset(
+        _FAST_PROPS_BINARY_CANONICAL | _FAST_PROPS_INTENSITY_CANONICAL
+    ):
+        return False
+    if intensity_image is None and (canon & _FAST_PROPS_INTENSITY_CANONICAL):
         return False
     return True
 
@@ -218,52 +263,52 @@ def regionprops_table_fast(
     equivalent_diameter = np.sqrt(4.0 * area / np.pi)
     extent = area / bbox_area
 
-    # ----- assemble the output dict in the same column-layout as the
-    # original _props_to_dict.
+    # ----- assemble the output dict using the EXACT property names the
+    # caller asked for (so a caller using v0.18 names sees v0.18 columns
+    # and a caller using v0.22 names sees v0.22 columns).
     out: dict = {}
     for prop in properties:
-        if prop == "label":
-            out["label"] = _int_column(label_values)
-        elif prop == "area":
-            out["area"] = _int_column(area)
-        elif prop == "bbox":
+        canon = _canonical(prop)
+        if canon == "label":
+            out[prop] = _int_column(label_values)
+        elif canon == "area":
+            out[prop] = _int_column(area)
+        elif canon == "bbox":
             for k in range(4):
-                out[f"bbox{separator}{k}"] = _int_column(bbox[:, k])
-        elif prop == "bbox_area":
-            out["bbox_area"] = _int_column(bbox_area)
-        elif prop == "centroid":
-            out[f"centroid{separator}0"] = _float_column(centroid_r)
-            out[f"centroid{separator}1"] = _float_column(centroid_c)
-        elif prop == "local_centroid":
-            out[f"local_centroid{separator}0"] = _float_column(
+                out[f"{prop}{separator}{k}"] = _int_column(bbox[:, k])
+        elif canon == "area_bbox":
+            out[prop] = _int_column(bbox_area)
+        elif canon == "centroid":
+            out[f"{prop}{separator}0"] = _float_column(centroid_r)
+            out[f"{prop}{separator}1"] = _float_column(centroid_c)
+        elif canon == "centroid_local":
+            out[f"{prop}{separator}0"] = _float_column(
                 centroid_r - bbox[:, 0].astype(np.float64)
             )
-            out[f"local_centroid{separator}1"] = _float_column(
+            out[f"{prop}{separator}1"] = _float_column(
                 centroid_c - bbox[:, 1].astype(np.float64)
             )
-        elif prop == "equivalent_diameter":
-            out["equivalent_diameter"] = _float_column(equivalent_diameter)
-        elif prop == "extent":
-            out["extent"] = _float_column(extent)
-        elif prop == "weighted_centroid":
-            out[f"weighted_centroid{separator}0"] = _float_column(wcen_r)
-            out[f"weighted_centroid{separator}1"] = _float_column(wcen_c)
-        elif prop == "weighted_local_centroid":
-            out[f"weighted_local_centroid{separator}0"] = _float_column(
+        elif canon == "equivalent_diameter_area":
+            out[prop] = _float_column(equivalent_diameter)
+        elif canon == "extent":
+            out[prop] = _float_column(extent)
+        elif canon == "centroid_weighted":
+            out[f"{prop}{separator}0"] = _float_column(wcen_r)
+            out[f"{prop}{separator}1"] = _float_column(wcen_c)
+        elif canon == "centroid_weighted_local":
+            out[f"{prop}{separator}0"] = _float_column(
                 wcen_r - bbox[:, 0].astype(np.float64)
             )
-            out[f"weighted_local_centroid{separator}1"] = _float_column(
+            out[f"{prop}{separator}1"] = _float_column(
                 wcen_c - bbox[:, 1].astype(np.float64)
             )
-        elif prop == "mean_intensity":
-            out["mean_intensity"] = _float_column(mean_int)
-        elif prop == "min_intensity":
-            out["min_intensity"] = _float_column(min_int)
-        elif prop == "max_intensity":
-            out["max_intensity"] = _float_column(max_int)
+        elif canon == "intensity_mean":
+            out[prop] = _float_column(mean_int)
+        elif canon == "intensity_min":
+            out[prop] = _float_column(min_int)
+        elif canon == "intensity_max":
+            out[prop] = _float_column(max_int)
         else:
-            # Defensive: should never get here because can_use_fast_path
-            # already filtered.
             raise RuntimeError(
                 f"_regionprops_fast: property {prop!r} not supported"
             )

@@ -40,8 +40,9 @@ _DISPATCH_BLOCK = textwrap.dedent("""\
                 can_use_fast_path as _rpft_can_use_fast_path,
                 regionprops_table_fast as _rpft_regionprops_table_fast,
             )
+            _rpft_spacing = locals().get("spacing", None)
             if _rpft_can_use_fast_path(properties, intensity_image,
-                                       extra_properties):
+                                       extra_properties, _rpft_spacing):
                 return _rpft_regionprops_table_fast(
                     label_image, intensity_image, properties, separator
                 )
